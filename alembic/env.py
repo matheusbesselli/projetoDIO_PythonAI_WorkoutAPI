@@ -21,6 +21,7 @@ target_metadata = BaseModel.metadata
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
+    print(f"Running migrations offline with URL: {url}")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -45,6 +46,7 @@ async def run_async_migrations() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    print(f"Running migrations online with URL: {connectable.url}")
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
 
