@@ -1,4 +1,5 @@
 from datetime import datetime
+from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 from fastapi import APIRouter, Body, HTTPException, Query, status, Depends
 from pydantic import UUID4
@@ -23,9 +24,10 @@ async def post(
     db_session: DatabaseDependency, 
     atleta_in: AtletaIn = Body(...)
 ):
+   
     categoria_nome = atleta_in.categoria.nome
     centro_treinamento_nome = atleta_in.centro_treinamento.nome
-
+    
     categoria = (await db_session.execute(
         select(CategoriaModel).filter_by(nome=categoria_nome))
     ).scalars().first()
@@ -54,6 +56,12 @@ async def post(
         
         db_session.add(atleta_model)
         await db_session.commit()
+        
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_303_SEE_OTHER, 
+            detail=f'Já existe um atleta cadastrado com o CPF: {atleta_in.cpf}'
+        )        
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
