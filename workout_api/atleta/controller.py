@@ -2,7 +2,9 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 from fastapi import APIRouter, Body, HTTPException, Query, status, Depends
+from fastapi_pagination import LimitOffsetPage, add_pagination, paginate, Params  # Use default Params if LimitOffsetParams isn't working
 from pydantic import UUID4
+from typing import List
 
 from workout_api.atleta.schemas import AtletaIn, AtletaOut, AtletaOutSimplified, AtletaUpdate
 from workout_api.atleta.models import AtletaModel
@@ -24,7 +26,7 @@ async def post(
     db_session: DatabaseDependency, 
     atleta_in: AtletaIn = Body(...)
 ):
-   
+    
     categoria_nome = atleta_in.categoria.nome
     centro_treinamento_nome = atleta_in.centro_treinamento.nome
     
@@ -75,13 +77,14 @@ async def post(
     '/', 
     summary='Consultar todos os Atletas',
     status_code=status.HTTP_200_OK,
-    response_model=list[AtletaOutSimplified],
+    response_model=LimitOffsetPage[AtletaOutSimplified],
 )
 async def query(
     db_session: DatabaseDependency,
     nome: str = Query(None, description='Filtrar por nome do atleta'),
     cpf: str = Query(None, description='Filtrar por CPF do atleta'),
-) -> list[AtletaOut]:
+    params: Params = Depends(lambda: Params(limit=50)),  
+) -> LimitOffsetPage[AtletaOutSimplified]:
     query = select(AtletaModel)
     
     if nome:
@@ -90,7 +93,7 @@ async def query(
     if cpf:
         query = query.filter(AtletaModel.cpf == cpf)    
     
-    atletas: list[AtletaOut] = (await db_session.execute(query)).scalars().all()
+    atletas = (await db_session.execute(query)).scalars().all()
       
     if not atletas:
         raise HTTPException(
@@ -98,7 +101,7 @@ async def query(
             detail=f'Nenhum atleta encontrado com os parâmetros fornecidos.'
         )
     
-    return [AtletaOut.model_validate(atleta) for atleta in atletas]
+    return paginate(atletas, params)
 
 @router.get(
     '/{id}', 
@@ -118,6 +121,8 @@ async def get(id: UUID4, db_session: DatabaseDependency) -> AtletaOut:
         )
     
     return atleta
+
+add_pagination(router)
 
 
 @router.patch(
