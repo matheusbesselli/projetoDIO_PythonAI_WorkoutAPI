@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import uuid4
-from fastapi import APIRouter, Body, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, Query, status, Depends
 from pydantic import UUID4
 
 from workout_api.atleta.schemas import AtletaIn, AtletaOut, AtletaUpdate
@@ -69,11 +69,28 @@ async def post(
     status_code=status.HTTP_200_OK,
     response_model=list[AtletaOut],
 )
-async def query(db_session: DatabaseDependency) -> list[AtletaOut]:
-    atletas: list[AtletaOut] = (await db_session.execute(select(AtletaModel))).scalars().all()
+async def query(
+    db_session: DatabaseDependency,
+    nome: str = Query(None, description='Filtrar por nome do atleta'),
+    cpf: str = Query(None, description='Filtrar por CPF do atleta'),
+) -> list[AtletaOut]:
+    query = select(AtletaModel)
+    
+    if nome:
+        query = query.where(AtletaModel.nome == nome)
+    
+    if cpf:
+        query = query.filter(AtletaModel.cpf == cpf)    
+    
+    atletas: list[AtletaOut] = (await db_session.execute(query)).scalars().all()
+      
+    if not atletas:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f'Nenhum atleta encontrado com os parâmetros fornecidos.'
+        )
     
     return [AtletaOut.model_validate(atleta) for atleta in atletas]
-
 
 @router.get(
     '/{id}', 
@@ -101,7 +118,7 @@ async def get(id: UUID4, db_session: DatabaseDependency) -> AtletaOut:
     status_code=status.HTTP_200_OK,
     response_model=AtletaOut,
 )
-async def get(id: UUID4, db_session: DatabaseDependency, atleta_up: AtletaUpdate = Body(...)) -> AtletaOut:
+async def patch(id: UUID4, db_session: DatabaseDependency, atleta_up: AtletaUpdate = Body(...)) -> AtletaOut:
     atleta: AtletaOut = (
         await db_session.execute(select(AtletaModel).filter_by(id=id))
     ).scalars().first()
@@ -127,7 +144,7 @@ async def get(id: UUID4, db_session: DatabaseDependency, atleta_up: AtletaUpdate
     summary='Deletar um Atleta pelo id',
     status_code=status.HTTP_204_NO_CONTENT
 )
-async def get(id: UUID4, db_session: DatabaseDependency) -> None:
+async def delete(id: UUID4, db_session: DatabaseDependency) -> None:
     atleta: AtletaOut = (
         await db_session.execute(select(AtletaModel).filter_by(id=id))
     ).scalars().first()
